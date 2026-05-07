@@ -34,6 +34,12 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             margin-bottom: 30px;
             text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
         }
 
         h1 {
@@ -79,6 +85,12 @@
             padding: 30px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             margin-bottom: 30px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .skills-list:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
         }
 
         .skills-list ul {
@@ -103,6 +115,35 @@
 
         .button-secondary:hover {
             background-color: #5568d3;
+        }
+
+        .next-steps {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .next-steps:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .next-steps ul {
+            list-style: none;
+            text-align: left;
+        }
+
+        .next-steps li {
+            background: #f0f4ff;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            color: #333;
+            font-size: 1em;
+            border-left: 4px solid #764ba2;
         }
 
         @media (max-width: 600px) {
@@ -151,6 +192,16 @@
                 <li>✓ GitHub</li>
             </ul>
             <button class="button-secondary">Открыть GitHub</button>
+        </div>
+
+        <h2>Следующий этап обучения</h2>
+
+        <div class="next-steps">
+            <ul>
+                <li>📝 Научиться ставить задачи Codex</li>
+                <li>💾 Научиться сохранять изменения в Git</li>
+                <li>🌐 Научиться публиковать сайт через GitHub Pages</li>
+            </ul>
         </div>
     </div>
 </body>
