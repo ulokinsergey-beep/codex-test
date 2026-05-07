@@ -2,43 +2,156 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мой первый проект с Codex</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f0f0f0;
-            padding: 50px;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 40px 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
         h1 {
             color: #333;
-            font-size: 2em;
+            font-size: 1.8em;
             margin-bottom: 20px;
         }
+
         p {
             color: #666;
-            font-size: 1.2em;
-            margin-bottom: 30px;
+            font-size: 1em;
+            margin-bottom: 25px;
+            line-height: 1.6;
         }
+
         button {
             background-color: #4CAF50;
             color: white;
-            padding: 10px 20px;
+            padding: 12px 30px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             font-size: 1em;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.2s;
+            font-weight: bold;
         }
+
         button:hover {
             background-color: #45a049;
+            transform: translateY(-2px);
+        }
+
+        h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .skills-list {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .skills-list ul {
+            list-style: none;
+            text-align: left;
+        }
+
+        .skills-list li {
+            background: #f8f9fa;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            color: #333;
+            font-size: 1em;
+            border-left: 4px solid #667eea;
+        }
+
+        .button-secondary {
+            background-color: #667eea;
+            margin-top: 20px;
+        }
+
+        .button-secondary:hover {
+            background-color: #5568d3;
+        }
+
+        @media (max-width: 600px) {
+            .card {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            h2 {
+                font-size: 1.3em;
+            }
+
+            p {
+                font-size: 0.95em;
+            }
+
+            .skills-list {
+                padding: 20px;
+            }
+
+            button {
+                padding: 10px 20px;
+                font-size: 0.95em;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Мой первый проект с Codex</h1>
-    <p>Это тестовая страница, созданная через Codex в VS Code</p>
-    <button>Проверить</button>
+    <div class="container">
+        <div class="card">
+            <h1>Мой первый проект с Codex</h1>
+            <p>Это тестовая страница, созданная через Codex в VS Code</p>
+            <button>Проверить</button>
+        </div>
+
+        <h2>Что я уже научился делать</h2>
+
+        <div class="skills-list">
+            <ul>
+                <li>✓ VS Code</li>
+                <li>✓ Codex</li>
+                <li>✓ Git</li>
+                <li>✓ GitHub</li>
+            </ul>
+            <button class="button-secondary">Открыть GitHub</button>
+        </div>
+    </div>
 </body>
 </html>
