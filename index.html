@@ -201,6 +201,33 @@
             border-left: 4px solid #764ba2;
         }
 
+        footer {
+            background: rgba(0, 0, 0, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 30px 20px;
+            text-align: center;
+            margin-top: 50px;
+            width: 100%;
+        }
+
+        .footer-content {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .footer-content p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+            margin-bottom: 8px;
+        }
+
+        .footer-content .footer-note {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.85em;
+            margin-top: 15px;
+            font-style: italic;
+        }
+
         @media (max-width: 600px) {
             .card {
                 padding: 30px 20px;
@@ -275,5 +302,14 @@
             </ul>
         </div>
     </div>
+
+    <footer>
+        <div class="footer-content">
+            <p>📚 Учебный проект Codex</p>
+            <p>🖥️ Сделано в VS Code</p>
+            <p>🚀 Опубликовано через GitHub Pages</p>
+            <p class="footer-note">Это тестовый проект для обучения работе с AI-разработчиком</p>
+        </div>
+    </footer>
 </body>
 </html>
