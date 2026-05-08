@@ -15,7 +15,7 @@
             font-family: 'Arial', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 80px 20px 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -98,6 +98,61 @@
             text-align: left;
         }
 
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        .nav ul {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav li {
+            margin: 0 20px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: color 0.3s;
+        }
+
+        .nav a:hover {
+            color: #667eea;
+        }
+
+        .process-list {
+            list-style: none;
+            text-align: left;
+            padding-left: 0;
+        }
+
+        .process-list li {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .process-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
         .skills-list li {
             background: #f8f9fa;
             padding: 12px 20px;
@@ -175,6 +230,13 @@
     </style>
 </head>
 <body>
+    <nav class="nav">
+        <ul>
+            <li><a href="#">Главная</a></li>
+            <li><a href="#">Чему научился</a></li>
+            <li><a href="#">Следующий шаг</a></li>
+        </ul>
+    </nav>
     <div class="container">
         <div class="card">
             <h1>Мой первый проект с Codex</h1>
@@ -201,6 +263,15 @@
                 <li>📝 Научиться ставить задачи Codex</li>
                 <li>💾 Научиться сохранять изменения в Git</li>
                 <li>🌐 Научиться публиковать сайт через GitHub Pages</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>Как работает мой процесс</h2>
+            <ul class="process-list">
+                <li>Codex пишет код</li>
+                <li>Git сохраняет историю</li>
+                <li>GitHub публикует сайт</li>
             </ul>
         </div>
     </div>
