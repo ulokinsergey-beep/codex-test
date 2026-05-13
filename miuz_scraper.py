@@ -116,7 +116,12 @@ class MiuzScraper:
         if cookies:
             self.session.cookies.update(parse_cookie_header(cookies))
 
-    def run(self, product_url: str | None = None, limit: int | None = None) -> None:
+    def run(
+        self,
+        product_url: str | None = None,
+        limit: int | None = None,
+        category_filter: str | None = None,
+    ) -> None:
         workbook, sheet = self.open_workbook()
         processed_links = self.load_processed_links(sheet)
 
@@ -125,6 +130,11 @@ class MiuzScraper:
         else:
             print("Собираю ссылки товаров из sitemap...")
             product_urls = self.discover_product_urls()
+            total_found = len(product_urls)
+            print(f"Всего товаров найдено: {total_found}")
+            if category_filter:
+                product_urls = [url for url in product_urls if category_filter in url]
+                print(f"Товаров после фильтра {category_filter}: {len(product_urls)}")
 
         if limit is not None:
             product_urls = product_urls[:limit]
@@ -839,6 +849,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Парсер товаров MIUZ")
     parser.add_argument("--product-url", help="Собрать только один товар по ссылке")
     parser.add_argument("--limit", type=int, help="Ограничить количество товаров для проверки")
+    parser.add_argument(
+        "--category-filter",
+        help='Фильтр категории по фрагменту URL, например "/catalog/earrings/"',
+    )
     parser.add_argument("--output", default=OUTPUT_XLSX, help="Файл Excel")
     parser.add_argument("--images-dir", default=IMAGES_DIR, help="Папка для фото")
     parser.add_argument("--delay-min", type=float, default=2.0, help="Минимальная задержка между запросами")
@@ -871,7 +885,7 @@ def main() -> None:
         retries=args.retries,
         cookies=args.cookies,
     )
-    scraper.run(product_url=args.product_url, limit=args.limit)
+    scraper.run(product_url=args.product_url, limit=args.limit, category_filter=args.category_filter)
 
 
 if __name__ == "__main__":
