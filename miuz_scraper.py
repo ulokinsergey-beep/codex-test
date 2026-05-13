@@ -7,7 +7,7 @@
     python miuz_scraper.py --product-url https://miuz.ru/catalog/earrings/E01-EST-0246ES/
 
 Нужные пакеты:
-    pip install requests beautifulsoup4 openpyxl
+    pip install cloudscraper beautifulsoup4 openpyxl
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from typing import Any, Iterable
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree as ET
 
+import cloudscraper
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import Workbook, load_workbook
@@ -67,7 +68,7 @@ class MiuzScraper:
         delay_min: float = 2.0,
         delay_max: float = 3.0,
         retries: int = 3,
-        cookie: str | None = None,
+        cookies: str | None = None,
     ) -> None:
         self.output = output
         self.images_dir = images_dir
@@ -75,24 +76,45 @@ class MiuzScraper:
         self.delay_max = delay_max
         self.retries = retries
         self.last_request_at = 0.0
-        self.session = requests.Session()
+        self.session = cloudscraper.create_scraper(
+            browser={
+                "browser": "chrome",
+                "platform": "windows",
+                "desktop": True,
+            }
+        )
         self.session.headers.update(
             {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0 Safari/537.36"
+                    "Chrome/124.0.0.0 Safari/537.36"
                 ),
                 "Accept": (
                     "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                    "image/avif,image/webp,image/apng,*/*;q=0.8"
+                    "image/avif,image/webp,image/apng,*/*;q=0.8,"
+                    "application/signed-exchange;v=b3;q=0.7"
                 ),
                 "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
+                "DNT": "1",
+                "Pragma": "no-cache",
+                "Priority": "u=0, i",
+                "Referer": CATALOG_URL,
+                "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1",
             }
         )
-        if cookie:
-            self.session.headers["Cookie"] = cookie
+        if cookies:
+            self.session.cookies.update(parse_cookie_header(cookies))
 
     def run(self, product_url: str | None = None, limit: int | None = None) -> None:
         workbook, sheet = self.open_workbook()
@@ -234,27 +256,37 @@ class MiuzScraper:
         page_text = soup.get_text("\n", strip=True)
         json_objects = list(extract_json_objects(soup))
         product_json = first_product_json(json_objects)
+        product_data = extract_nuxt_product_data(soup)
+        selected_offer = find_selected_offer(product_data)
 
         article = (
-            clean_value(value_from_json(product_json, "sku"))
+            clean_value(product_data.get("code") or product_data.get("xmlId"))
+            or clean_value(selected_offer.get("code") or selected_offer.get("xmlId"))
+            or clean_value(selected_offer.get("offerXmlId"))
+            or clean_value(value_from_json(product_json, "sku"))
             or find_labeled_value(page_text, ["Артикул", "SKU"])
             or article_from_url(url)
         )
         name = (
-            clean_value(value_from_json(product_json, "name"))
+            clean_value(product_data.get("name"))
+            or clean_value(product_data.get("seo", {}).get("h1") if isinstance(product_data.get("seo"), dict) else "")
+            or clean_value(value_from_json(product_json, "name"))
             or text_of_first(soup, ["h1"])
             or clean_title(meta_content(soup, "og:title"))
         )
         price = (
-            extract_price_from_json(product_json)
+            price_from_offer(selected_offer)
+            or extract_price_from_json(product_json)
             or extract_visible_price(soup, page_text)
         )
         uin = (
-            find_regex(response.text, [r"(?:УИН|UIN)[^\d]{0,40}(\d{8,})"])
+            clean_value(selected_offer.get("uin"))
+            or find_regex(response.text, [r"(?:УИН|UIN)[^\d]{0,40}(\d{8,})"])
             or find_labeled_value(page_text, ["УИН", "UIN"])
         )
         product_id = (
-            find_regex(
+            clean_value(selected_offer.get("offerXmlId") or selected_offer.get("id"))
+            or find_regex(
                 response.text,
                 [
                     r"(?:PRODUCT_ID|productId|product_id|data-product-id|itemId|offerId)[\"'\s:=,-]{1,20}(\d{4,})",
@@ -566,6 +598,13 @@ def extract_images(
 ) -> list[str]:
     urls: list[str] = []
 
+    # Nuxt keeps the current product images in /api/product/info. Prefer it so
+    # related products, banners, and responsive duplicates are not downloaded.
+    product_data = extract_nuxt_product_data(soup)
+    urls.extend(extract_product_image_urls(product_data))
+    if urls:
+        return normalize_image_urls(urls, page_url)
+
     for obj in json_objects:
         for value in iter_json_values(obj):
             if not isinstance(value, dict):
@@ -588,6 +627,10 @@ def extract_images(
     urls.extend(re.findall(r"https?://[^\s\"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s\"']*)?", html, re.I))
     urls.extend(re.findall(r"//[^\s\"']+\.(?:jpg|jpeg|png|webp)(?:\?[^\s\"']*)?", html, re.I))
 
+    return normalize_image_urls(urls, page_url)
+
+
+def normalize_image_urls(urls: Iterable[str], page_url: str) -> list[str]:
     cleaned: list[str] = []
     for url in urls:
         absolute = normalize_image_url(urljoin(page_url, url.strip()))
@@ -595,6 +638,115 @@ def extract_images(
             cleaned.append(absolute)
 
     return unique(cleaned)
+
+
+def extract_nuxt_product_data(soup: BeautifulSoup) -> dict[str, Any]:
+    for script in soup.find_all("script", attrs={"type": "application/json"}):
+        raw = script.string or script.get_text(strip=True)
+        if not raw:
+            continue
+
+        try:
+            payload = decode_nuxt_payload(raw)
+        except (json.JSONDecodeError, IndexError, TypeError, RecursionError):
+            continue
+
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            continue
+
+        for key, value in data.items():
+            if "/api/product/info" not in key or not isinstance(value, dict):
+                continue
+            product_data = value.get("data")
+            if isinstance(product_data, dict):
+                return product_data
+
+    return {}
+
+
+def decode_nuxt_payload(raw: str) -> Any:
+    values = json.loads(raw)
+    if not isinstance(values, list):
+        return values
+
+    memo: dict[int, Any] = {}
+    wrappers = {"Reactive", "ShallowReactive", "Readonly", "ShallowReadonly", "Ref", "ComputedRef"}
+
+    def revive_ref(index: int) -> Any:
+        if index in memo:
+            return memo[index]
+        value = values[index]
+        memo[index] = None
+        result = revive_value(value)
+        memo[index] = result
+        return result
+
+    def revive_child(value: Any) -> Any:
+        if type(value) is int and 0 <= value < len(values):
+            return revive_ref(value)
+        if type(value) is int:
+            return value
+        return revive_value(value)
+
+    def revive_value(value: Any) -> Any:
+        if type(value) is int:
+            return value
+        if isinstance(value, list):
+            if value and value[0] in wrappers and len(value) > 1:
+                return revive_child(value[1])
+            return [revive_child(item) for item in value]
+        if isinstance(value, dict):
+            return {key: revive_child(item) for key, item in value.items()}
+        return value
+
+    return revive_ref(0)
+
+
+def extract_product_image_urls(product_data: dict[str, Any]) -> list[str]:
+    image_urls: list[str] = []
+    images = product_data.get("images")
+    if not isinstance(images, list):
+        return image_urls
+
+    for image in images:
+        if not isinstance(image, dict) or image.get("duplicate"):
+            continue
+        selected_url = ""
+        for group_name in ["main", "gallery", "original", "thumb", "galleryMin"]:
+            group = image.get(group_name)
+            if not isinstance(group, dict):
+                continue
+            for key in ["src", "srcX2"]:
+                value = group.get(key)
+                if value:
+                    selected_url = str(value)
+                    break
+            if selected_url:
+                break
+        if selected_url:
+            image_urls.append(selected_url)
+
+    return image_urls
+
+
+def find_selected_offer(product_data: dict[str, Any]) -> dict[str, Any]:
+    for value in iter_json_values(product_data):
+        if isinstance(value, dict) and value.get("selected") is True and value.get("offerXmlId"):
+            return value
+    return {}
+
+
+def price_from_offer(offer: dict[str, Any]) -> str:
+    price = offer.get("price")
+    if isinstance(price, dict):
+        value = price.get("value")
+        currency_sign = price.get("currencySign") or "₽"
+        if value:
+            return f"{int(value):,}".replace(",", " ") + f" {currency_sign}"
+    if price:
+        return format_price(price)
+    return ""
 
 
 def as_list(value: Any) -> list[str]:
@@ -666,6 +818,23 @@ def unique(values: Iterable[str]) -> list[str]:
     return result
 
 
+def parse_cookie_header(cookie_header: str) -> dict[str, str]:
+    cookie_header = cookie_header.strip()
+    if cookie_header.lower().startswith("cookie:"):
+        cookie_header = cookie_header.split(":", 1)[1].strip()
+
+    cookies: dict[str, str] = {}
+    for part in cookie_header.split(";"):
+        if "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        name = name.strip()
+        if not name:
+            continue
+        cookies[name] = value.strip()
+    return cookies
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Парсер товаров MIUZ")
     parser.add_argument("--product-url", help="Собрать только один товар по ссылке")
@@ -675,11 +844,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delay-min", type=float, default=2.0, help="Минимальная задержка между запросами")
     parser.add_argument("--delay-max", type=float, default=3.0, help="Максимальная задержка между запросами")
     parser.add_argument("--retries", type=int, default=3, help="Количество повторов запроса")
-    parser.add_argument("--cookie", help="Cookie из браузера, если MIUZ показывает капчу")
+    parser.add_argument(
+        "--cookies",
+        "--cookie",
+        dest="cookies",
+        help='Cookies из браузера, например: "name=value; name2=value2"',
+    )
     return parser.parse_args()
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(line_buffering=True)
+
     args = parse_args()
     if args.delay_min < 0 or args.delay_max < 0 or args.delay_max < args.delay_min:
         raise SystemExit("Некорректные задержки: нужно 0 <= delay-min <= delay-max")
@@ -690,7 +869,7 @@ def main() -> None:
         delay_min=args.delay_min,
         delay_max=args.delay_max,
         retries=args.retries,
-        cookie=args.cookie,
+        cookies=args.cookies,
     )
     scraper.run(product_url=args.product_url, limit=args.limit)
 
