@@ -51,6 +51,13 @@
 - ❌ Никогда не вставляй другие секреты в код
 - Если нужны секреты — спроси, как их обработать безопасно
 
+## Cursor Cloud specific instructions
+
+- **Project type:** Single-file static HTML site. No dependencies, no build step, no package manager.
+- **Dev server:** Run `python3 -m http.server 8080` from `/workspace` to serve the site locally at `http://localhost:8080/index.html`.
+- **Lint/test:** No linter or test framework configured. Validate by opening in browser and checking rendering.
+- **All code lives in `index.html`** — inline CSS and vanilla JS only (per project rules above).
+
 ## Как использовать этот файл
 
 Этот файл читается автоматически и задаёт правила для всех операций с проектом. Пользователю не нужно напоминать эти правила — Codex будет их соблюдать.
