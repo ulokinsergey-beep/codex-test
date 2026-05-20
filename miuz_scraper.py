@@ -121,9 +121,10 @@ class MiuzScraper:
         product_url: str | None = None,
         limit: int | None = None,
         category_filter: str | None = None,
+        update_existing: bool = False,
     ) -> None:
         workbook, sheet = self.open_workbook()
-        processed_links = self.load_processed_links(sheet)
+        processed_rows = self.load_processed_rows(sheet)
 
         if product_url:
             product_urls = [product_url]
@@ -144,7 +145,8 @@ class MiuzScraper:
 
         for index, url in enumerate(product_urls, start=1):
             normalized_url = normalize_url(url)
-            if normalized_url in processed_links:
+            should_update_existing = update_existing or product_url is not None
+            if normalized_url in processed_rows and not should_update_existing:
                 print(f"Товар {index} из {total}: уже есть в Excel, пропускаю {normalized_url}")
                 continue
 
@@ -152,9 +154,8 @@ class MiuzScraper:
             try:
                 product = self.parse_product(normalized_url)
                 downloaded = self.download_images(product.images, product.article)
-                self.append_product(sheet, product)
+                self.save_product(sheet, product, processed_rows)
                 workbook.save(self.output)
-                processed_links.add(normalized_url)
                 print(
                     "Готово: "
                     f"{product.article or 'без артикула'} | "
@@ -268,15 +269,18 @@ class MiuzScraper:
         product_json = first_product_json(json_objects)
         product_data = extract_nuxt_product_data(soup)
         selected_offer = find_selected_offer(product_data)
+        url_info = product_url_info(url)
+        url_article = url_info["article"]
+        is_diamond = url_info["category"] == "diamonds"
 
-        article = (
+        page_article = (
             clean_value(product_data.get("code") or product_data.get("xmlId"))
             or clean_value(selected_offer.get("code") or selected_offer.get("xmlId"))
             or clean_value(selected_offer.get("offerXmlId"))
             or clean_value(value_from_json(product_json, "sku"))
             or find_labeled_value(page_text, ["Артикул", "SKU"])
-            or article_from_url(url)
         )
+        article = choose_article(page_article, url_article, is_diamond)
         name = (
             clean_value(product_data.get("name"))
             or clean_value(product_data.get("seo", {}).get("h1") if isinstance(product_data.get("seo"), dict) else "")
@@ -305,6 +309,8 @@ class MiuzScraper:
             )
             or find_labeled_value(page_text, ["ID товара", "ID изделия", "ID"])
         )
+        if not product_id and is_diamond and url_article.isdigit():
+            product_id = url_article
         images = extract_images(soup, response.text, json_objects, url)
 
         missing = []
@@ -376,32 +382,49 @@ class MiuzScraper:
         return workbook, sheet
 
     @staticmethod
-    def load_processed_links(sheet) -> set[str]:
+    def load_processed_rows(sheet) -> dict[str, int]:
         header = [cell.value for cell in sheet[1]]
         try:
             link_column = header.index("Ссылка на товар") + 1
         except ValueError:
-            return set()
+            return {}
 
-        links: set[str] = set()
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        rows: dict[str, int] = {}
+        for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             value = row[link_column - 1]
             if value:
-                links.add(normalize_url(str(value)))
-        return links
+                rows[normalize_url(str(value))] = row_number
+        return rows
+
+    @staticmethod
+    def load_processed_links(sheet) -> set[str]:
+        return set(MiuzScraper.load_processed_rows(sheet))
+
+    @staticmethod
+    def product_row(product: Product) -> list[str]:
+        return [
+            product.uin,
+            product.product_id,
+            product.article,
+            product.name,
+            product.price,
+            product.url,
+        ]
+
+    @staticmethod
+    def save_product(sheet, product: Product, processed_rows: dict[str, int]) -> None:
+        row_values = MiuzScraper.product_row(product)
+        row_number = processed_rows.get(normalize_url(product.url))
+        if row_number:
+            for column, value in enumerate(row_values, start=1):
+                sheet.cell(row=row_number, column=column, value=value)
+        else:
+            sheet.append(row_values)
+            processed_rows[normalize_url(product.url)] = sheet.max_row
 
     @staticmethod
     def append_product(sheet, product: Product) -> None:
-        sheet.append(
-            [
-                product.uin,
-                product.product_id,
-                product.article,
-                product.name,
-                product.price,
-                product.url,
-            ]
-        )
+        sheet.append(MiuzScraper.product_row(product))
 
 
 def xml_values(root: ET.Element, tag_name: str) -> list[str]:
@@ -424,8 +447,8 @@ def is_product_url(url: str) -> bool:
     if article in {"new", "sale", "hit", "diamonds"}:
         return False
 
-    # У товаров MIUZ в ссылке обычно артикул: буквы/цифры/дефисы и хотя бы одна цифра.
-    return bool(re.search(r"\d", article)) and bool(re.fullmatch(r"[A-Za-zА-Яа-я0-9_-]+", article))
+    # У товаров MIUZ в ссылке обычно артикул: буквы/цифры/точки/дефисы и хотя бы одна цифра.
+    return bool(re.search(r"\d", article)) and bool(re.fullmatch(r"[A-Za-zА-Яа-я0-9_.-]+", article))
 
 
 def normalize_url(url: str) -> str:
@@ -439,6 +462,40 @@ def normalize_url(url: str) -> str:
 
 def article_from_url(url: str) -> str:
     return urlparse(url).path.rstrip("/").split("/")[-1]
+
+
+def product_url_info(url: str) -> dict[str, str]:
+    parts = [part for part in urlparse(url).path.strip("/").split("/") if part]
+    category = parts[1] if len(parts) >= 3 and parts[0] == "catalog" else ""
+    article = parts[-1] if parts else ""
+    return {"category": category, "article": article}
+
+
+def has_cyrillic(value: str) -> bool:
+    return bool(re.search(r"[А-Яа-яЁё]", value))
+
+
+def is_bad_page_article(page_article: str, url_article: str) -> bool:
+    article = clean_value(page_article)
+    if not article:
+        return True
+    if article.lower() in {"очках", "икулом"}:
+        return True
+    if has_cyrillic(article):
+        return True
+    if "." in url_article and len(article) < len(url_article) and url_article.startswith(article + "."):
+        return True
+    return False
+
+
+def choose_article(page_article: str, url_article: str, is_diamond: bool) -> str:
+    url_article = clean_value(url_article)
+    page_article = clean_value(page_article)
+    if not is_diamond:
+        return url_article
+    if is_bad_page_article(page_article, url_article):
+        return url_article
+    return page_article
 
 
 def clean_value(value: Any) -> str:
@@ -853,6 +910,11 @@ def parse_args() -> argparse.Namespace:
         "--category-filter",
         help='Фильтр категории по фрагменту URL, например "/catalog/earrings/"',
     )
+    parser.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="Обновлять уже существующие строки Excel по ссылке товара",
+    )
     parser.add_argument("--output", default=OUTPUT_XLSX, help="Файл Excel")
     parser.add_argument("--images-dir", default=IMAGES_DIR, help="Папка для фото")
     parser.add_argument("--delay-min", type=float, default=2.0, help="Минимальная задержка между запросами")
@@ -885,7 +947,12 @@ def main() -> None:
         retries=args.retries,
         cookies=args.cookies,
     )
-    scraper.run(product_url=args.product_url, limit=args.limit, category_filter=args.category_filter)
+    scraper.run(
+        product_url=args.product_url,
+        limit=args.limit,
+        category_filter=args.category_filter,
+        update_existing=args.update_existing,
+    )
 
 
 if __name__ == "__main__":
